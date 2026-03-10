@@ -15,10 +15,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var (
+type App struct {
 	tracer trace.Tracer
 	meter  metric.Meter
-)
+}
 
 func newResource(serviceName string) (*resource.Resource, error) {
 	r, err := resource.Merge(
@@ -58,29 +58,31 @@ func newMeterProvider(ctx context.Context, res *resource.Resource) (*sdkmetric.M
 	), nil
 }
 
-func initTelemetry(ctx context.Context, serviceName string) (func(), error) {
+func initTelemetry(ctx context.Context, serviceName string) (*App, func(), error) {
 	res, err := newResource(serviceName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize otel resource: %w", err)
+		return nil, nil, fmt.Errorf("failed to initialize otel resource: %w", err)
 	}
 
 	tp, err := newTraceProvider(ctx, res)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize otel trace provider: %w", err)
+		return nil, nil, fmt.Errorf("failed to initialize otel trace provider: %w", err)
 	}
 
 	mp, err := newMeterProvider(ctx, res)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize otel meter provider: %w", err)
+		return nil, nil, fmt.Errorf("failed to initialize otel meter provider: %w", err)
 	}
 
 	otel.SetTracerProvider(tp)
-	tracer = tp.Tracer(serviceName)
-
 	otel.SetMeterProvider(mp)
-	meter = mp.Meter(serviceName)
 
-	return func() {
+	app := &App{
+		tracer: tp.Tracer(serviceName),
+		meter:  mp.Meter(serviceName),
+	}
+
+	return app, func() {
 		_ = tp.Shutdown(ctx)
 		_ = mp.Shutdown(ctx)
 	}, nil
