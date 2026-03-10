@@ -37,4 +37,8 @@ go run .
 
 Or the docker image:
 
-https://hub.docker.com/r/mcapell/speedtest
+```bash
+docker run --rm \
+  -e OTEL_EXPORTER_OTLP_ENDPOINT=your-otel-collector:4317 \
+  ghcr.io/mcapell/speedtest-otel:main
+```
