@@ -1,4 +1,4 @@
-module github.com/mcapell/speedtest-prometheus
+module github.com/mcapell/speedtest-otel
 
 go 1.23.2
 
