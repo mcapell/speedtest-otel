@@ -40,7 +40,7 @@ func TestRecordMetrics(t *testing.T) {
 		if len(data.DataPoints) != 1 {
 			t.Fatalf("expected 1 data point, got %d", len(data.DataPoints))
 		}
-		expected := float64(server.Latency.Microseconds())
+		expected := float64(server.Latency.Milliseconds())
 		if data.DataPoints[0].Sum != expected {
 			t.Errorf("expected sum %v, got %v", expected, data.DataPoints[0].Sum)
 		}
@@ -52,8 +52,8 @@ func TestRecordMetrics(t *testing.T) {
 		if len(data.DataPoints) != 1 {
 			t.Fatalf("expected 1 data point, got %d", len(data.DataPoints))
 		}
-		if data.DataPoints[0].Value != float64(server.DLSpeed) {
-			t.Errorf("expected %v, got %v", float64(server.DLSpeed), data.DataPoints[0].Value)
+		if data.DataPoints[0].Value != server.DLSpeed.Mbps() {
+			t.Errorf("expected %v, got %v", server.DLSpeed.Mbps(), data.DataPoints[0].Value)
 		}
 	})
 
@@ -63,8 +63,8 @@ func TestRecordMetrics(t *testing.T) {
 		if len(data.DataPoints) != 1 {
 			t.Fatalf("expected 1 data point, got %d", len(data.DataPoints))
 		}
-		if data.DataPoints[0].Value != float64(server.ULSpeed) {
-			t.Errorf("expected %v, got %v", float64(server.ULSpeed), data.DataPoints[0].Value)
+		if data.DataPoints[0].Value != server.ULSpeed.Mbps() {
+			t.Errorf("expected %v, got %v", server.ULSpeed.Mbps(), data.DataPoints[0].Value)
 		}
 	})
 }
