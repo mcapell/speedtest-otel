@@ -12,13 +12,7 @@ func main() {
 	logger := initLogger()
 	ctx := WithContext(context.Background(), logger)
 
-	prometheusHost := os.Getenv("PROMETHEUS_HOST")
-	if prometheusHost == "" {
-		logger.Error("`PROMETHEUS_HOST` is not defined")
-		os.Exit(1)
-	}
-
-	shutdown, err := initTracer(ctx, "speedtest")
+	shutdown, err := initTelemetry(ctx, "speedtest")
 	if err != nil {
 		logger.Error("open-telemetry setup", "error", err)
 		os.Exit(1)
@@ -34,8 +28,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := pushMetrics(ctx, prometheusHost, speedTest); err != nil {
-		logger.Error("metrics storage failed", "error", err)
+	if err := recordMetrics(ctx, speedTest); err != nil {
+		logger.Error("metrics recording failed", "error", err)
 		os.Exit(1)
 	}
 }
@@ -68,17 +62,15 @@ func runSpeedTest(ctx context.Context) (*speedtest.Server, error) {
 
 	if err := target.PingTest(nil); err != nil {
 		return nil, fmt.Errorf("error running the ping test: %w", err)
-
 	}
 	if err := target.DownloadTest(); err != nil {
 		return nil, fmt.Errorf("error running download test: %w", err)
 	}
-
 	if err := target.UploadTest(); err != nil {
 		return nil, fmt.Errorf("error running upload test: %w", err)
 	}
 
-	logger.Info(fmt.Sprintf("Latency: %s, Download: %s, Upload: %s\n", target.Latency, target.DLSpeed, target.ULSpeed))
+	logger.Info(fmt.Sprintf("Latency: %s, Download: %s, Upload: %s", target.Latency, target.DLSpeed, target.ULSpeed))
 
 	return target, nil
 }

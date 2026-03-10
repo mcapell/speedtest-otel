@@ -5,20 +5,22 @@ import (
 	"fmt"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
-var tracer trace.Tracer
+var (
+	tracer trace.Tracer
+	meter  metric.Meter
+)
 
-func newExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
-	return otlptracegrpc.New(ctx, otlptracegrpc.WithInsecure())
-}
-
-func newTraceProvider(exp sdktrace.SpanExporter, serviceName string) (*sdktrace.TracerProvider, error) {
+func newResource(serviceName string) (*resource.Resource, error) {
 	r, err := resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
@@ -29,29 +31,57 @@ func newTraceProvider(exp sdktrace.SpanExporter, serviceName string) (*sdktrace.
 	if err != nil {
 		return nil, fmt.Errorf("error merging provider resource: %w", err)
 	}
+	return r, nil
+}
+
+func newTraceProvider(ctx context.Context, res *resource.Resource) (*sdktrace.TracerProvider, error) {
+	exp, err := otlptracegrpc.New(ctx, otlptracegrpc.WithInsecure())
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize trace exporter: %w", err)
+	}
 
 	return sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp),
-		sdktrace.WithResource(r),
+		sdktrace.WithResource(res),
 	), nil
 }
 
-func initTracer(ctx context.Context, serviceName string) (func(), error) {
-	exp, err := newExporter(ctx)
+func newMeterProvider(ctx context.Context, res *resource.Resource) (*sdkmetric.MeterProvider, error) {
+	exp, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithInsecure())
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize otel exporter: %w", err)
+		return nil, fmt.Errorf("failed to initialize metric exporter: %w", err)
 	}
 
-	tp, err := newTraceProvider(exp, serviceName)
+	return sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exp)),
+		sdkmetric.WithResource(res),
+	), nil
+}
+
+func initTelemetry(ctx context.Context, serviceName string) (func(), error) {
+	res, err := newResource(serviceName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize otel provider: %w", err)
+		return nil, fmt.Errorf("failed to initialize otel resource: %w", err)
+	}
+
+	tp, err := newTraceProvider(ctx, res)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize otel trace provider: %w", err)
+	}
+
+	mp, err := newMeterProvider(ctx, res)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize otel meter provider: %w", err)
 	}
 
 	otel.SetTracerProvider(tp)
 	tracer = tp.Tracer(serviceName)
 
+	otel.SetMeterProvider(mp)
+	meter = mp.Meter(serviceName)
+
 	return func() {
-		// Maybe log the error at the very least?
 		_ = tp.Shutdown(ctx)
+		_ = mp.Shutdown(ctx)
 	}, nil
 }

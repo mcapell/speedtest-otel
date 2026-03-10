@@ -2,45 +2,46 @@ package main
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/push"
+	"go.opentelemetry.io/otel/metric"
 	"github.com/showwin/speedtest-go/speedtest"
 )
 
-var (
-	latency = prometheus.NewSummary(prometheus.SummaryOpts{
-		Name:       "latency",
-		Help:       "Speed test latency.",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-	})
-	uploadSpeed = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "upload_speed",
-		Help: "Upload speed in bytes/second.",
-	})
-	downloadSpeed = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "download_speed",
-		Help: "Download speed in bytes/second.",
-	})
-)
-
-func init() {
-	prometheus.MustRegister(latency)
-	prometheus.MustRegister(uploadSpeed)
-	prometheus.MustRegister(downloadSpeed)
-}
-
-func pushMetrics(ctx context.Context, prometheusHost string, speedTest *speedtest.Server) error {
-	_, span := tracer.Start(ctx, "pushMetrics")
+func recordMetrics(ctx context.Context, speedTest *speedtest.Server) error {
+	_, span := tracer.Start(ctx, "recordMetrics")
 	defer span.End()
 
-	latency.Observe(float64(speedTest.Latency.Microseconds()))
-	uploadSpeed.Set(float64(speedTest.ULSpeed))
-	downloadSpeed.Set(float64(speedTest.DLSpeed))
+	latency, err := meter.Float64Histogram(
+		"latency",
+		metric.WithDescription("Speed test latency in microseconds."),
+		metric.WithUnit("us"),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create latency histogram: %w", err)
+	}
 
-	return push.New(prometheusHost, "speedtest").
-		Collector(latency).
-		Collector(uploadSpeed).
-		Collector(downloadSpeed).
-		Push()
+	uploadSpeed, err := meter.Float64Gauge(
+		"upload_speed",
+		metric.WithDescription("Upload speed in bytes/second."),
+		metric.WithUnit("By/s"),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create upload speed gauge: %w", err)
+	}
+
+	downloadSpeed, err := meter.Float64Gauge(
+		"download_speed",
+		metric.WithDescription("Download speed in bytes/second."),
+		metric.WithUnit("By/s"),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create download speed gauge: %w", err)
+	}
+
+	latency.Record(ctx, float64(speedTest.Latency.Microseconds()))
+	uploadSpeed.Record(ctx, float64(speedTest.ULSpeed))
+	downloadSpeed.Record(ctx, float64(speedTest.DLSpeed))
+
+	return nil
 }

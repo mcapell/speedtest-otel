@@ -1,23 +1,30 @@
-# Speedtest Prometheus Exporter
+# Speedtest OpenTelemetry Exporter
 
-This application performs an internet speed test using the `speedtest-go` library and exports the results as Prometheus metrics.
+This application performs an internet speed test using the `speedtest-go` library and exports the results as OpenTelemetry metrics and traces.
 
 ## Features
 
 - Measures latency, download, and upload speeds.
-- Pushes metrics to a Prometheus Pushgateway.
+- Exports metrics and traces via OTLP to any OpenTelemetry-compatible backend (Prometheus, Grafana, Datadog, etc.)
 
 ## Prerequisites
 
-- Go 1.16 or later
-- Access to a Prometheus Pushgateway
+- Go 1.23 or later
+- An OpenTelemetry collector or OTLP-compatible backend
 
 ## Configuration
 
-Set the `PROMETHEUS_HOST` environment variable to point to your Prometheus Pushgateway:
+The application uses the standard OpenTelemetry environment variables to configure the exporter:
+
+| Variable | Description | Default |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint | `localhost:4317` |
+| `OTEL_EXPORTER_OTLP_INSECURE` | Disable TLS (set to `true` for local collectors) | `false` |
+
+Example:
 
 ```bash
-export PROMETHEUS_HOST=http://your-prometheus-pushgateway:9091
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://your-otel-collector:4317
 ```
 
 ## Usage
@@ -25,7 +32,7 @@ export PROMETHEUS_HOST=http://your-prometheus-pushgateway:9091
 Run the application:
 
 ```bash
-go run main.go
+go run .
 ```
 
 Or the docker image:
