@@ -101,7 +101,7 @@ func (a *App) runSpeedTest(ctx context.Context) (*speedtest.Server, error) {
 		return nil, fmt.Errorf("error running upload test: %w", err)
 	}
 
-	logger.Info(fmt.Sprintf("Latency: %s, Download: %s, Upload: %s", target.Latency, target.DLSpeed, target.ULSpeed))
+	logger.Info(fmt.Sprintf("Latency: %s, Jitter: %s, Download: %s, Upload: %s", target.Latency, target.Jitter, target.DLSpeed, target.ULSpeed))
 
 	return target, nil
 }
