@@ -7,69 +7,11 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
-	"go.opentelemetry.io/otel/trace"
 )
-
-type App struct {
-	tracer          trace.Tracer
-	meter           metric.Meter
-	pingDuration metric.Float64Histogram
-	jitter          metric.Float64Gauge
-	uploadSpeed     metric.Float64Gauge
-	downloadSpeed   metric.Float64Gauge
-}
-
-func newApp(tracer trace.Tracer, meter metric.Meter) (*App, error) {
-	pingDuration, err := meter.Float64Histogram(
-		"speedtest.ping.duration",
-		metric.WithDescription("Latency measured during ping test."),
-		metric.WithUnit("s"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ping duration histogram: %w", err)
-	}
-
-	jitter, err := meter.Float64Gauge(
-		"speedtest.ping.jitter",
-		metric.WithDescription("Jitter measured during ping test."),
-		metric.WithUnit("s"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ping jitter gauge: %w", err)
-	}
-
-	uploadSpeed, err := meter.Float64Gauge(
-		"speedtest.upload.speed",
-		metric.WithDescription("Upload speed measured during speed test."),
-		metric.WithUnit("By/s"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create upload speed gauge: %w", err)
-	}
-
-	downloadSpeed, err := meter.Float64Gauge(
-		"speedtest.download.speed",
-		metric.WithDescription("Download speed measured during speed test."),
-		metric.WithUnit("By/s"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create download speed gauge: %w", err)
-	}
-
-	return &App{
-		tracer:        tracer,
-		meter:         meter,
-		pingDuration:  pingDuration,
-		jitter:        jitter,
-		uploadSpeed:   uploadSpeed,
-		downloadSpeed: downloadSpeed,
-	}, nil
-}
 
 func newResource(serviceName string) (*resource.Resource, error) {
 	r, err := resource.Merge(

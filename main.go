@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
-
-	"github.com/showwin/speedtest-go/speedtest"
 )
 
 func main() {
@@ -32,45 +29,4 @@ func main() {
 		logger.Error("metrics recording failed", "error", err)
 		os.Exit(1)
 	}
-}
-
-func (a *App) runSpeedTest(ctx context.Context) (*speedtest.Server, error) {
-	ctx, span := a.tracer.Start(ctx, "runSpeedTest")
-	defer span.End()
-
-	logger := FromContext(ctx)
-
-	var speedtestClient = speedtest.New()
-
-	serverList, err := speedtestClient.FetchServers()
-	if err != nil {
-		return nil, fmt.Errorf("error fetching server list: %w", err)
-	}
-
-	targets, err := serverList.FindServer(nil)
-	if err != nil {
-		return nil, fmt.Errorf("server not found: %w", err)
-	}
-
-	if len(targets) == 0 {
-		return nil, fmt.Errorf("server not found")
-	}
-
-	target := targets[0]
-
-	logger.Info("start speed test")
-
-	if err := target.PingTest(nil); err != nil {
-		return nil, fmt.Errorf("error running the ping test: %w", err)
-	}
-	if err := target.DownloadTest(); err != nil {
-		return nil, fmt.Errorf("error running download test: %w", err)
-	}
-	if err := target.UploadTest(); err != nil {
-		return nil, fmt.Errorf("error running upload test: %w", err)
-	}
-
-	logger.Info(fmt.Sprintf("Latency: %s, Download: %s, Upload: %s", target.Latency, target.DLSpeed, target.ULSpeed))
-
-	return target, nil
 }
