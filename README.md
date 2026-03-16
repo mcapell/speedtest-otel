@@ -13,8 +13,8 @@ This application performs an internet speed test using the `speedtest-go` librar
 |---|---|---|---|
 | `speedtest.ping.duration` | Histogram | `s` | Latency measured during ping test |
 | `speedtest.ping.jitter` | Gauge | `s` | Jitter measured during ping test |
-| `speedtest.download.speed` | Gauge | `By/s` | Download speed measured during speed test |
-| `speedtest.upload.speed` | Gauge | `By/s` | Upload speed measured during speed test |
+| `speedtest.download.speed` | Gauge | `Mbit/s` | Download speed measured during speed test |
+| `speedtest.upload.speed` | Gauge | `Mbit/s` | Upload speed measured during speed test |
 
 ## Prerequisites
 

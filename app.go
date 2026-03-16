@@ -40,7 +40,7 @@ func newApp(tracer trace.Tracer, meter metric.Meter) (*App, error) {
 	uploadSpeed, err := meter.Float64Gauge(
 		"speedtest.upload.speed",
 		metric.WithDescription("Upload speed measured during speed test."),
-		metric.WithUnit("By/s"),
+		metric.WithUnit("Mbit/s"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create upload speed gauge: %w", err)
@@ -49,7 +49,7 @@ func newApp(tracer trace.Tracer, meter metric.Meter) (*App, error) {
 	downloadSpeed, err := meter.Float64Gauge(
 		"speedtest.download.speed",
 		metric.WithDescription("Download speed measured during speed test."),
-		metric.WithUnit("By/s"),
+		metric.WithUnit("Mbit/s"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create download speed gauge: %w", err)
@@ -112,8 +112,8 @@ func (a *App) recordMetrics(ctx context.Context, speedTest *speedtest.Server) er
 
 	a.pingDuration.Record(ctx, speedTest.Latency.Seconds())
 	a.jitter.Record(ctx, speedTest.Jitter.Seconds())
-	a.uploadSpeed.Record(ctx, float64(speedTest.ULSpeed))
-	a.downloadSpeed.Record(ctx, float64(speedTest.DLSpeed))
+	a.uploadSpeed.Record(ctx, speedTest.ULSpeed.Mbps())
+	a.downloadSpeed.Record(ctx, speedTest.DLSpeed.Mbps())
 
 	return nil
 }
