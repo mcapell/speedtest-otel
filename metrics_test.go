@@ -34,10 +34,10 @@ func TestRecordMetrics(t *testing.T) {
 				expected float64
 				isGauge  bool
 			}{
-				{name: "latency", expected: 20},
-				{name: "jitter", expected: 5},
-				{name: "download_speed", expected: speedtest.ByteRate(100.0).Mbps(), isGauge: true},
-				{name: "upload_speed", expected: speedtest.ByteRate(50.0).Mbps(), isGauge: true},
+				{name: "speedtest.ping.duration", expected: 0.020},
+				{name: "speedtest.ping.jitter", expected: 0.005, isGauge: true},
+				{name: "speedtest.download.speed", expected: 100.0, isGauge: true},
+				{name: "speedtest.upload.speed", expected: 50.0, isGauge: true},
 			},
 		},
 	}
@@ -47,9 +47,9 @@ func TestRecordMetrics(t *testing.T) {
 			reader := sdkmetric.NewManualReader()
 			mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 
-			app := &App{
-				tracer: noop.NewTracerProvider().Tracer(""),
-				meter:  mp.Meter("test"),
+			app, err := newApp(noop.NewTracerProvider().Tracer(""), mp.Meter("test"))
+			if err != nil {
+				t.Fatalf("failed to initialize app: %v", err)
 			}
 
 			if err := app.recordMetrics(context.Background(), tt.server); err != nil {
