@@ -26,8 +26,8 @@ func TestRecordMetrics(t *testing.T) {
 			server: &speedtest.Server{
 				Latency: 20 * time.Millisecond,
 				Jitter:  5 * time.Millisecond,
-				DLSpeed: speedtest.ByteRate(100.0),
-				ULSpeed: speedtest.ByteRate(50.0),
+				DLSpeed: speedtest.ByteRate(12_500_000), // 100 Mbps
+				ULSpeed: speedtest.ByteRate(6_250_000),  // 50 Mbps
 			},
 			metrics: []struct {
 				name     string
