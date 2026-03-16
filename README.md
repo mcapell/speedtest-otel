@@ -4,8 +4,17 @@ This application performs an internet speed test using the `speedtest-go` librar
 
 ## Features
 
-- Measures latency, download, and upload speeds.
+- Measures latency, jitter, download, and upload speeds.
 - Exports metrics and traces via OTLP to any OpenTelemetry-compatible backend (Prometheus, Grafana, Datadog, etc.)
+
+## Metrics
+
+| Metric | Type | Unit | Description |
+|---|---|---|---|
+| `speedtest.ping.duration` | Histogram | `s` | Latency measured during ping test |
+| `speedtest.ping.jitter` | Gauge | `s` | Jitter measured during ping test |
+| `speedtest.download.speed` | Gauge | `By/s` | Download speed measured during speed test |
+| `speedtest.upload.speed` | Gauge | `By/s` | Upload speed measured during speed test |
 
 ## Prerequisites
 
