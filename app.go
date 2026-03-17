@@ -10,15 +10,16 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const speedTestTimeout = 300 * time.Second
+const speedTestTimeout = 5 * time.Minute
 
 type App struct {
-	tracer        trace.Tracer
-	meter         metric.Meter
-	pingDuration  metric.Float64Histogram
-	jitter        metric.Float64Gauge
-	uploadSpeed   metric.Float64Gauge
-	downloadSpeed metric.Float64Gauge
+	tracer          trace.Tracer
+	meter           metric.Meter
+	speedtestClient *speedtest.Speedtest
+	pingDuration    metric.Float64Histogram
+	jitter          metric.Float64Gauge
+	uploadSpeed     metric.Float64Gauge
+	downloadSpeed   metric.Float64Gauge
 }
 
 func newApp(tracer trace.Tracer, meter metric.Meter) (*App, error) {
@@ -59,12 +60,13 @@ func newApp(tracer trace.Tracer, meter metric.Meter) (*App, error) {
 	}
 
 	return &App{
-		tracer:        tracer,
-		meter:         meter,
-		pingDuration:  pingDuration,
-		jitter:        jitter,
-		uploadSpeed:   uploadSpeed,
-		downloadSpeed: downloadSpeed,
+		tracer:          tracer,
+		meter:           meter,
+		speedtestClient: speedtest.New(),
+		pingDuration:    pingDuration,
+		jitter:          jitter,
+		uploadSpeed:     uploadSpeed,
+		downloadSpeed:   downloadSpeed,
 	}, nil
 }
 
@@ -77,9 +79,7 @@ func (a *App) runSpeedTest(ctx context.Context) (*speedtest.Server, error) {
 
 	logger := FromContext(ctx)
 
-	speedtestClient := speedtest.New()
-
-	serverList, err := speedtestClient.FetchServerListContext(ctx)
+	serverList, err := a.speedtestClient.FetchServerListContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching server list: %w", err)
 	}
@@ -95,7 +95,7 @@ func (a *App) runSpeedTest(ctx context.Context) (*speedtest.Server, error) {
 
 	target := targets[0]
 
-	logger.Info("start speed test")
+	logger.Info("start speed test", "server", target.Name)
 
 	if err := target.PingTestContext(ctx, nil); err != nil {
 		return nil, fmt.Errorf("error running the ping test: %w", err)
@@ -107,7 +107,8 @@ func (a *App) runSpeedTest(ctx context.Context) (*speedtest.Server, error) {
 		return nil, fmt.Errorf("error running upload test: %w", err)
 	}
 
-	logger.Info(fmt.Sprintf("Latency: %s, Jitter: %s, Download: %.2f Mbit/s, Upload: %.2f Mbit/s", target.Latency, target.Jitter, target.DLSpeed.Mbps(), target.ULSpeed.Mbps()))
+	logger.Info(fmt.Sprintf("Latency: %s, Jitter: %s, Download: %.2f Mbit/s, Upload: %.2f Mbit/s",
+		target.Latency, target.Jitter, target.DLSpeed.Mbps(), target.ULSpeed.Mbps()))
 
 	return target, nil
 }

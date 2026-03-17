@@ -4,21 +4,53 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-const shutdownTimeout = 10 * time.Second
+const (
+	shutdownTimeout      = 10 * time.Second
+	metricExportInterval = 5 * time.Second
+	defaultOTLPEndpoint  = "localhost:4317"
+)
 
-func newResource(serviceName string) (*resource.Resource, error) {
-	r, err := resource.Merge(
+// newSharedGRPCConn creates a single gRPC client connection that is shared by
+// both the trace and metric exporters, avoiding duplicate TCP connections to
+// the same collector endpoint. TLS is used by default; set
+// OTEL_EXPORTER_OTLP_METRICS_INSECURE=true to disable it.
+func newSharedGRPCConn() (*grpc.ClientConn, error) {
+	creds := credentials.NewTLS(nil)
+	if os.Getenv("OTEL_EXPORTER_OTLP_METRICS_INSECURE") == "true" {
+		creds = insecure.NewCredentials()
+	}
+
+	ep := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	if ep == "" {
+		ep = defaultOTLPEndpoint
+	}
+	ep = strings.TrimPrefix(ep, "https://")
+	ep = strings.TrimPrefix(ep, "http://")
+
+	conn, err := grpc.NewClient(ep, grpc.WithTransportCredentials(creds))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
+	}
+	return conn, nil
+}
+
+func initTelemetry(ctx context.Context, logger *slog.Logger, serviceName string) (*App, func(), error) {
+	res, err := resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
@@ -26,59 +58,42 @@ func newResource(serviceName string) (*resource.Resource, error) {
 		),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("error merging provider resource: %w", err)
-	}
-	return r, nil
-}
-
-func newTraceProvider(ctx context.Context, res *resource.Resource) (*sdktrace.TracerProvider, error) {
-	exp, err := otlptracegrpc.New(ctx, otlptracegrpc.WithInsecure())
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize trace exporter: %w", err)
-	}
-
-	return sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
-		sdktrace.WithResource(res),
-	), nil
-}
-
-func newMeterProvider(ctx context.Context, res *resource.Resource) (*sdkmetric.MeterProvider, error) {
-	exp, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithInsecure())
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize metric exporter: %w", err)
-	}
-
-	return sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exp)),
-		sdkmetric.WithResource(res),
-	), nil
-}
-
-func initTelemetry(ctx context.Context, logger *slog.Logger, serviceName string) (*App, func(), error) {
-	res, err := newResource(serviceName)
-	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize otel resource: %w", err)
 	}
 
-	tp, err := newTraceProvider(ctx, res)
+	conn, err := newSharedGRPCConn()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to initialize otel trace provider: %w", err)
+		return nil, nil, fmt.Errorf("failed to initialize gRPC connection: %w", err)
 	}
 
-	mp, err := newMeterProvider(ctx, res)
+	traceExp, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, fmt.Errorf("failed to initialize trace exporter: %w", err)
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(traceExp),
+		sdktrace.WithResource(res),
+	)
+
+	metricExp, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
 	if err != nil {
 		_ = tp.Shutdown(ctx)
-		return nil, nil, fmt.Errorf("failed to initialize otel meter provider: %w", err)
+		_ = conn.Close()
+		return nil, nil, fmt.Errorf("failed to initialize metric exporter: %w", err)
 	}
-
-	otel.SetTracerProvider(tp)
-	otel.SetMeterProvider(mp)
+	mp := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp,
+			sdkmetric.WithInterval(metricExportInterval),
+		)),
+		sdkmetric.WithResource(res),
+	)
 
 	app, err := newApp(tp.Tracer(serviceName), mp.Meter(serviceName))
 	if err != nil {
 		_ = tp.Shutdown(ctx)
 		_ = mp.Shutdown(ctx)
+		_ = conn.Close()
 		return nil, nil, fmt.Errorf("failed to initialize instruments: %w", err)
 	}
 
@@ -91,6 +106,9 @@ func initTelemetry(ctx context.Context, logger *slog.Logger, serviceName string)
 		}
 		if err := mp.Shutdown(shutdownCtx); err != nil {
 			logger.Error("failed to shut down meter provider", "error", err)
+		}
+		if err := conn.Close(); err != nil {
+			logger.Error("failed to close gRPC connection", "error", err)
 		}
 	}
 
