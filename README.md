@@ -27,8 +27,8 @@ The application uses the standard OpenTelemetry environment variables to configu
 
 | Variable | Description | Default |
 |---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint | `localhost:4317` |
-| `OTEL_EXPORTER_OTLP_INSECURE` | Disable TLS (set to `true` for local collectors) | `false` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint. Use `http://` for plaintext or `https://` for TLS. | `https://localhost:4317` |
+| `OTEL_EXPORTER_OTLP_INSECURE` | Disable TLS (set to `true` when the endpoint has no scheme) | `false` |
 
 Example:
 
@@ -48,6 +48,6 @@ Or the docker image:
 
 ```bash
 docker run --rm \
-  -e OTEL_EXPORTER_OTLP_ENDPOINT=your-otel-collector:4317 \
+  -e OTEL_EXPORTER_OTLP_ENDPOINT=http://your-otel-collector:4317 \
   ghcr.io/mcapell/speedtest-otel:main
 ```
