@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -12,6 +14,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
+
+const shutdownTimeout = 10 * time.Second
 
 func newResource(serviceName string) (*resource.Resource, error) {
 	r, err := resource.Merge(
@@ -51,7 +55,7 @@ func newMeterProvider(ctx context.Context, res *resource.Resource) (*sdkmetric.M
 	), nil
 }
 
-func initTelemetry(ctx context.Context, serviceName string) (*App, func(), error) {
+func initTelemetry(ctx context.Context, logger *slog.Logger, serviceName string) (*App, func(), error) {
 	res, err := newResource(serviceName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize otel resource: %w", err)
@@ -64,6 +68,7 @@ func initTelemetry(ctx context.Context, serviceName string) (*App, func(), error
 
 	mp, err := newMeterProvider(ctx, res)
 	if err != nil {
+		_ = tp.Shutdown(ctx)
 		return nil, nil, fmt.Errorf("failed to initialize otel meter provider: %w", err)
 	}
 
@@ -72,11 +77,22 @@ func initTelemetry(ctx context.Context, serviceName string) (*App, func(), error
 
 	app, err := newApp(tp.Tracer(serviceName), mp.Meter(serviceName))
 	if err != nil {
+		_ = tp.Shutdown(ctx)
+		_ = mp.Shutdown(ctx)
 		return nil, nil, fmt.Errorf("failed to initialize instruments: %w", err)
 	}
 
-	return app, func() {
-		_ = tp.Shutdown(ctx)
-		_ = mp.Shutdown(ctx)
-	}, nil
+	shutdown := func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+
+		if err := tp.Shutdown(shutdownCtx); err != nil {
+			logger.Error("failed to shut down trace provider", "error", err)
+		}
+		if err := mp.Shutdown(shutdownCtx); err != nil {
+			logger.Error("failed to shut down meter provider", "error", err)
+		}
+	}
+
+	return app, shutdown, nil
 }

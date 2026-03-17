@@ -2,31 +2,43 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
 	logger := initLogger()
-	ctx := WithContext(context.Background(), logger)
 
-	app, shutdown, err := initTelemetry(ctx, "speedtest")
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	ctx = WithContext(ctx, logger)
+
+	app, shutdown, err := initTelemetry(ctx, logger, "speedtest")
 	if err != nil {
 		logger.Error("open-telemetry setup", "error", err)
 		os.Exit(1)
 	}
-	defer shutdown()
 
+	err = run(ctx, app)
+	shutdown()
+
+	if err != nil {
+		logger.Error("speedtest failed", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, app *App) error {
 	ctx, span := app.tracer.Start(ctx, "speedtest")
 	defer span.End()
 
 	speedTest, err := app.runSpeedTest(ctx)
 	if err != nil {
-		logger.Error("speed test failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("speed test: %w", err)
 	}
 
-	if err := app.recordMetrics(ctx, speedTest); err != nil {
-		logger.Error("metrics recording failed", "error", err)
-		os.Exit(1)
-	}
+	app.recordMetrics(ctx, speedTest)
+	return nil
 }

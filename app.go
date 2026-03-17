@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/showwin/speedtest-go/speedtest"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 )
+
+const speedTestTimeout = 300 * time.Second
 
 type App struct {
 	tracer        trace.Tracer
@@ -69,11 +72,14 @@ func (a *App) runSpeedTest(ctx context.Context) (*speedtest.Server, error) {
 	ctx, span := a.tracer.Start(ctx, "runSpeedTest")
 	defer span.End()
 
+	ctx, cancel := context.WithTimeout(ctx, speedTestTimeout)
+	defer cancel()
+
 	logger := FromContext(ctx)
 
-	var speedtestClient = speedtest.New()
+	speedtestClient := speedtest.New()
 
-	serverList, err := speedtestClient.FetchServers()
+	serverList, err := speedtestClient.FetchServerListContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching server list: %w", err)
 	}
@@ -91,13 +97,13 @@ func (a *App) runSpeedTest(ctx context.Context) (*speedtest.Server, error) {
 
 	logger.Info("start speed test")
 
-	if err := target.PingTest(nil); err != nil {
+	if err := target.PingTestContext(ctx, nil); err != nil {
 		return nil, fmt.Errorf("error running the ping test: %w", err)
 	}
-	if err := target.DownloadTest(); err != nil {
+	if err := target.DownloadTestContext(ctx); err != nil {
 		return nil, fmt.Errorf("error running download test: %w", err)
 	}
-	if err := target.UploadTest(); err != nil {
+	if err := target.UploadTestContext(ctx); err != nil {
 		return nil, fmt.Errorf("error running upload test: %w", err)
 	}
 
@@ -106,7 +112,7 @@ func (a *App) runSpeedTest(ctx context.Context) (*speedtest.Server, error) {
 	return target, nil
 }
 
-func (a *App) recordMetrics(ctx context.Context, speedTest *speedtest.Server) error {
+func (a *App) recordMetrics(ctx context.Context, speedTest *speedtest.Server) {
 	_, span := a.tracer.Start(ctx, "recordMetrics")
 	defer span.End()
 
@@ -114,6 +120,4 @@ func (a *App) recordMetrics(ctx context.Context, speedTest *speedtest.Server) er
 	a.jitter.Record(ctx, speedTest.Jitter.Seconds())
 	a.uploadSpeed.Record(ctx, speedTest.ULSpeed.Mbps())
 	a.downloadSpeed.Record(ctx, speedTest.DLSpeed.Mbps())
-
-	return nil
 }

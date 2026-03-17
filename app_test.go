@@ -52,9 +52,7 @@ func TestRecordMetrics(t *testing.T) {
 				t.Fatalf("failed to initialize app: %v", err)
 			}
 
-			if err := app.recordMetrics(context.Background(), tt.server); err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			app.recordMetrics(context.Background(), tt.server)
 
 			var rm metricdata.ResourceMetrics
 			if err := reader.Collect(context.Background(), &rm); err != nil {
