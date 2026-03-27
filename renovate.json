@@ -4,7 +4,9 @@
   "packageRules": [
     {
       "groupName": "OpenTelemetry",
-      "matchPackagePrefixes": ["go.opentelemetry.io"]
+      "matchPackageNames": [
+        "go.opentelemetry.io{/,}**"
+      ]
     }
   ]
 }
