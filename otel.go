@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -19,14 +20,17 @@ const (
 	metricExportInterval = 5 * time.Second
 )
 
-func initTelemetry(ctx context.Context, logger *slog.Logger, serviceName string) (*App, func(), error) {
-	res, err := resource.Merge(
+func newResource(serviceName string) (*resource.Resource, error) {
+	return resource.Merge(
 		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName(serviceName),
+		resource.NewSchemaless(
+			attribute.String(string(semconv.ServiceNameKey), serviceName),
 		),
 	)
+}
+
+func initTelemetry(ctx context.Context, logger *slog.Logger, serviceName string) (*App, func(), error) {
+	res, err := newResource(serviceName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize otel resource: %w", err)
 	}
