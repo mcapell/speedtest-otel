@@ -1,9 +1,9 @@
 module github.com/mcapell/speedtest-otel
 
-go 1.25.0
+go 1.26
 
 require (
-	github.com/showwin/speedtest-go v1.7.11
+	github.com/showwin/speedtest-go v1.8.2
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.45.0
